@@ -1,0 +1,29 @@
+{
+  "name": "intermediacion",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Intermediación comercial B2B: tarifas de fábrica, pedidos, órdenes de servicio y facturación de comisiones",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:reset": "docker compose down -v && docker compose up -d postgres",
+    "prisma:generate": "npm run prisma:generate -w @intermediacion/api",
+    "prisma:migrate": "npm run prisma:migrate -w @intermediacion/api",
+    "prisma:push": "npm run prisma:push -w @intermediacion/api",
+    "seed": "npm run seed -w @intermediacion/api",
+    "api:dev": "npm run dev -w @intermediacion/api",
+    "api:build": "npm run build -w @intermediacion/api",
+    "api:test": "npm run test -w @intermediacion/api",
+    "web:dev": "npm run start -w @intermediacion/web",
+    "web:build": "npm run build -w @intermediacion/web",
+    "build": "npm run build -w @intermediacion/shared && npm run build -w @intermediacion/api && npm run build -w @intermediacion/web",
+    "setup": "npm install && npm run build -w @intermediacion/shared && npm run prisma:generate && npm run prisma:migrate && npm run seed"
+  }
+}

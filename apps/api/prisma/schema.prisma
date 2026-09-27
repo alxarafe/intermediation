@@ -1,0 +1,412 @@
+// Esquema de la intermediación comercial B2B.
+//
+// Concepto central: somos el intermediario entre empresas compradoras y
+// fábricas. La fábrica SERVE y FACTURA al cliente final a precios de tarifa;
+// nosotros coordinamos y facturamos a la fábrica nuestra comisión.
+//
+// Todos los importes son Decimal(numeric) — nunca float. El tipo `Float` de
+// Prisma mapea a `double precision` en Postgres y no serve para dinero.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------- Usuarios
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         String   @default("user") // admin | user
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  verifications   ReceiptVerification[]
+  batches         VerificationBatch[]
+
+  @@map("users")
+}
+
+// ------------------------------------------------------------------ Fábricas
+
+model Factory {
+  id           String  @id @default(cuid())
+  name         String
+  taxId        String  @unique
+  email        String?
+  phone        String?
+  addressLine  String?
+  city         String?
+  postalCode   String?
+  province     String?
+
+  /// Comisión general acordada con la fábrica. Es el valor por defecto para
+  /// todos sus productos salvo que un FactoryArticle la sobrescriba.
+  defaultCommissionPct Decimal @default(0) @db.Decimal(5, 2)
+
+  paymentTermDays Int       @default(30)
+  active          Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  factoryArticles FactoryArticle[]
+  priceLists      PriceList[]
+  serviceOrders   ServiceOrder[]
+  invoices        CommissionInvoice[]
+
+  @@map("factories")
+}
+
+// ----------------------------------------------------------------- Artículos
+
+/// Identidad propia del artículo, independiente de la fábrica que lo sirve.
+/// El mismo Tornillo M8 puede venir de tres fábricas con distinto SKU, precio
+/// y comisión, y sigue siendo el mismo artículo para el cliente final.
+model Article {
+  id          String  @id @default(cuid())
+  sku         String  @unique
+  name        String
+  description String?
+  unit        String  @default("ud") // ud, caja, palet, kg, m...
+  ean         String?
+  active      Boolean @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  factoryArticles FactoryArticle[]
+  orderLines      SalesOrderLine[]
+  serviceLines    ServiceOrderLine[]
+
+  @@map("articles")
+}
+
+/// Vínculo fábrica↔artículo: la fábrica suministra ese artículo, con su SKU
+/// propio y, si procede, una comisión pactada para ese producto concreto.
+model FactoryArticle {
+  id        String  @id @default(cuid())
+  factoryId String
+  articleId String
+  factorySku String?
+
+  /// Comisión específica para este producto. NULL = usar la general de la
+  /// fábrica. Se resuelve y congela en la línea de la orden de servicio.
+  commissionPctOverride Decimal? @db.Decimal(5, 2)
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  factory    Factory        @relation(fields: [factoryId], references: [id], onDelete: Cascade)
+  article    Article        @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  priceLines PriceListLine[]
+
+  @@unique([factoryId, articleId])
+  @@index([articleId, active])
+
+  @@map("factory_articles")
+}
+
+// ------------------------------------------------------------------- Tarifas
+
+/// Tarifa de una fábrica. Hay varias por fábrica (una por campaña, por ejemplo);
+/// qué precio rige en una fecha dada lo decide la vigencia de cada línea.
+model PriceList {
+  id            String   @id @default(cuid())
+  factoryId     String
+  code          String
+  name          String?
+  status        String   @default("draft") // draft | active | archived
+  effectiveFrom DateTime @db.Date
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  activatedAt   DateTime?
+
+  factory Factory        @relation(fields: [factoryId], references: [id], onDelete: Cascade)
+  lines   PriceListLine[]
+
+  @@unique([factoryId, code])
+  @@index([factoryId, status])
+
+  @@map("price_lists")
+}
+
+/// Precio de un artículo dentro de una tarifa, con su propio periodo de
+/// vigencia. Esto es lo que permite las dos modalidades del requisito:
+///
+///   - "de fecha a fecha"  → validTo informado: intervalo cerrado [from, to)
+///   - "de fecha a nueva tarifa" → validTo NULL: intervalo abierto que se
+///     cierra solo (validTo = validFrom de la línea posterior) al activar
+///     otra tarifa que toque ese mismo artículo.
+model PriceListLine {
+  id               String    @id @default(cuid())
+  priceListId      String
+  factoryArticleId String
+  unitPrice        Decimal   @db.Decimal(12, 4)
+  currency         String    @default("EUR")
+  validFrom        DateTime  @db.Date
+  validTo          DateTime? @db.Date
+  createdAt        DateTime  @default(now())
+
+  priceList      PriceList      @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  factoryArticle FactoryArticle @relation(fields: [factoryArticleId], references: [id], onDelete: Cascade)
+
+  // Índice de la consulta crítica: resolver (fábrica, artículo, fecha).
+  @@index([factoryArticleId, validFrom])
+  @@index([priceListId])
+
+  @@map("price_list_lines")
+}
+
+// ------------------------------------------------------------------ Clientes
+
+/// Cliente final: siempre una empresa que compra a las fábricas.
+model Customer {
+  id          String   @id @default(cuid())
+  name        String
+  taxId       String   @unique
+  email       String?
+  phone       String?
+  addressLine String?
+  city        String?
+  postalCode  String?
+  province    String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orders SalesOrder[]
+
+  @@map("customers")
+}
+
+// -------------------------------------------------------------------- Pedidos
+
+/// Pedido que nos hace el cliente final. Sus líneas llevan el precio CONGELADO
+/// en el momento del pedido: cambiar una tarifa después no lo altera.
+model SalesOrder {
+  id         String    @id @default(cuid())
+  reference  String    @unique
+  customerId String
+  orderDate  DateTime  @db.Date
+  status     String    @default("draft") // draft|confirmed|placed|completed|cancelled
+  notes      String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  customer      Customer          @relation(fields: [customerId], references: [id])
+  lines         SalesOrderLine[]
+  serviceOrders ServiceOrder[]
+
+  @@index([status, orderDate])
+  @@index([customerId])
+
+  @@map("sales_orders")
+}
+
+model SalesOrderLine {
+  id        String  @id @default(cuid())
+  orderId   String
+  articleId String
+
+  qty         Decimal @db.Decimal(12, 3)
+  /// Precio unitario resuelto contra la tarifa vigente en orderDate.
+  /// Congelado: es el contrato con el cliente aunque la tarifa cambie mañana.
+  unitPrice   Decimal @db.Decimal(12, 4)
+  lineTotal   Decimal @db.Decimal(14, 4)
+
+  /// Fábrica asignada (la más barata en esa fecha) y de qué tarifa salió.
+  /// NULL si en esa fecha no había ninguna fábrica con precio vigente.
+  factoryId      String?
+  priceListLineId String?
+  priceListCode  String?
+
+  notes    String?
+  createdAt DateTime @default(now())
+
+  order         SalesOrder          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  article       Article             @relation(fields: [articleId], references: [id])
+  serviceLines  ServiceOrderLine[]
+
+  @@index([orderId])
+  @@index([factoryId])
+
+  @@map("sales_order_lines")
+}
+
+// --------------------------------------------------------- Órdenes de servicio
+
+/// Lo que enviamos a la fábrica. Un pedido del cliente se reparte en varias
+/// órdenes de servicio, una por fábrica, según quién suministra cada línea.
+model ServiceOrder {
+  id           String    @id @default(cuid())
+  number       String    @unique
+  factoryId    String
+  salesOrderId String
+  status       String    @default("draft") // draft|sent|acknowledged|shipped|delivered|verified_ok|discrepancy|rejected|invoiced
+
+  sentAt      DateTime?
+  shippedAt   DateTime?
+  deliveredAt DateTime?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  factory      Factory                @relation(fields: [factoryId], references: [id])
+  salesOrder   SalesOrder             @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  lines        ServiceOrderLine[]
+  verification ReceiptVerification?
+  invoices     CommissionInvoiceServiceOrder[]
+
+  @@index([status])
+  @@index([factoryId, status])
+
+  @@map("service_orders")
+}
+
+model ServiceOrderLine {
+  id             String  @id @default(cuid())
+  serviceOrderId String
+  articleId      String
+  salesOrderLineId String?
+
+  qty        Decimal @db.Decimal(12, 3)
+  unitPrice  Decimal @db.Decimal(12, 4) // heredado del pedido, ya congelado
+  lineTotal  Decimal @db.Decimal(14, 4)
+
+  /// Comisión CONGELADA al generar la orden: override ?? general de la fábrica.
+  /// Si más tarde se pacta otra comisión, esta orden conserva la suya.
+  commissionPct    Decimal @db.Decimal(5, 2)
+  commissionAmount Decimal @db.Decimal(14, 4)
+
+  serviceOrder ServiceOrder @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  article      Article      @relation(fields: [articleId], references: [id])
+  /// Línea de pedido de la que salió. Opcional: si se borrara la línea del
+  /// pedido más tarde, la orden de servicio ya enviada debe seguir siendo válida.
+  salesOrderLine SalesOrderLine? @relation(fields: [salesOrderLineId], references: [id], onDelete: SetNull)
+
+  @@index([serviceOrderId])
+  @@index([salesOrderLineId])
+
+  @@map("service_order_lines")
+}
+
+// --------------------------------------------------------------- Verificación
+
+/// Lote de verificaciones hechas en una misma operación. Es lo que permite
+/// "verificar de golpe" un grupo de pedidos y deja trazabilidad del lote.
+model VerificationBatch {
+  id           String   @id @default(cuid())
+  reference    String   @unique
+  verifiedAt   DateTime @default(now())
+  notes        String?
+  verifiedById String?
+
+  verifiedBy    User?                 @relation(fields: [verifiedById], references: [id])
+  verifications ReceiptVerification[]
+
+  @@map("verification_batches")
+}
+
+model ReceiptVerification {
+  id            String   @id @default(cuid())
+  serviceOrderId String  @unique
+  receivedAt    DateTime @db.Date
+  verifiedAt    DateTime @default(now())
+  result        String // ok | discrepancy | rejected
+  notes         String?
+  verifiedById  String?
+  batchId       String?
+
+  serviceOrder ServiceOrder      @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+  verifiedBy   User?             @relation(fields: [verifiedById], references: [id])
+  batch        VerificationBatch? @relation(fields: [batchId], references: [id])
+
+  @@index([result])
+  @@index([batchId])
+
+  @@map("receipt_verifications")
+}
+
+// ------------------------------------------------------ Facturas de comisión
+
+/// Factura que emitimos A LA FÁBRICA por nuestra comisión. La fábrica es quien
+/// factura al cliente final; nosotros facturamos nuestro trabajo.
+model CommissionInvoice {
+  id        String    @id @default(cuid())
+  number    String    @unique
+  factoryId String
+  issueDate DateTime  @db.Date
+  dueDate   DateTime? @db.Date
+  status    String    @default("draft") // draft|issued|paid|cancelled
+
+  /// IVA de esta factura. Configurable porque el negocio opera desde Canarias
+  /// hacia Península: esas operaciones son exportación y van a 0%.
+  taxPct   Decimal @default(0) @db.Decimal(5, 2)
+  subtotal Decimal @db.Decimal(14, 4)
+  taxTotal Decimal @db.Decimal(14, 4)
+  total    Decimal @db.Decimal(14, 4)
+
+  notes    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  factory       Factory                       @relation(fields: [factoryId], references: [id])
+  lines         CommissionInvoiceLine[]
+  serviceOrders CommissionInvoiceServiceOrder[]
+
+  @@index([status, issueDate])
+  @@index([factoryId, status])
+
+  @@map("commission_invoices")
+}
+
+model CommissionInvoiceLine {
+  id        String  @id @default(cuid())
+  invoiceId String
+  description String
+  base        Decimal @db.Decimal(14, 4)
+  commissionPct Decimal @db.Decimal(5, 2)
+  amount      Decimal @db.Decimal(14, 4)
+  sortOrder   Int     @default(0)
+
+  invoice CommissionInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("commission_invoice_lines")
+}
+
+/// Qué órdenes de servicio cubre cada factura.
+/// `serviceOrderId` es UNIQUE: así el "cada orden se factura como máximo una
+/// vez" lo garantiza la base de datos, no una validación de la interfaz.
+model CommissionInvoiceServiceOrder {
+  invoiceId       String
+  serviceOrderId  String @unique
+  commissionAmount Decimal @db.Decimal(14, 4)
+
+  invoice      CommissionInvoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  serviceOrder ServiceOrder      @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
+
+  @@id([invoiceId, serviceOrderId])
+
+  @@map("commission_invoice_service_orders")
+}
+
+// ------------------------------------------------------------ Numeración
+
+/// Contador por tipo de documento y año. El incremento se hace con
+/// `ON CONFLICT DO UPDATE ... RETURNING`, que es atómico en Postgres, para que
+/// dos facturas simultáneas no obtengan el mismo número.
+model DocumentSequence {
+  kind  String
+  year  Int
+  value Int @default(0)
+
+  @@id([kind, year])
+  @@map("document_sequences")
+}

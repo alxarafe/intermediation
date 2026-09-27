@@ -1,0 +1,58 @@
+# Intermediation - Functional Application Definition
+
+## Purpose
+Sistema de gestión de comisiones para un sistema de intermediación entre fábricas y sus clientes, con la generación de facturas de comisión a las fábricas tras la verificación de la entrega.
+
+### Versión
+v0.1
+
+### Requisitos
+NodeJS, PostgresSQL, Prisma, Angular
+
+### Descripción Breve
+ Intermediación
+
+## Areas Principales
+
+### 1. Propósito General
+Esta aplicación está pensada como módulo complementando las capacidades principales de facturación y gestión empresarial. El plugin está diseñado para extender las funcionalidades estándar del sistema sin modificar la estructura base, lo que lo hace ideal para mostrarlo como ampliación SAP de pruebas.
+
+### 2. Funcionalidades Clave
+- Capabilidades específicas definidas por el módulo.
+- Conexión mediante API, CAP o integración cuando sea necesario.
+- Proporciona herramientas para casos de uso específicos del dominio empresarial.
+
+### 3. Flujo de Trabajo Típico
+1. **Configuración inicial**: Configurar parámetros y ajustes del plugin
+2. **Uso diario**: Aplicar las funcionalidades específicas del plugin
+3. **Integración**: Compatibilidad con otros plugins y el núcleo del sistema
+4. **Reportes y exportación**: Si el plugin incluye capacidades de reporte
+
+### 4. Integración con el Sistema
+- Dependencias definidas en metadatos del plugin
+- Compatibilidad con versiones mínimas especificadas
+- Integración con facturacion y otros módulos según sea necesario
+
+### 5. Consideraciones para Desarrollo de Aplicaciones Compatibles
+Al construir una aplicación compatible con este plugin, considere:
+
+- Los puntos de entrada y controladores siguen patrones establecidos
+- Las funcionalidades están diseñadas para ser complementarias al sistema principal
+- Se debe respetar la convención de páginas 
+- Los datos y configuraciones siguen el modelo de datos existente
+
+### 6. Casos de Uso Comunes
+- Consultas y reportes específicos del dominio del plugin
+- Integración con servicios externos (pagos, APIs, etc.)
+- Gestión de entidades específicas (clientes, facturas, productos, etc.)
+- Flujos de trabajo automatizados específicos
+
+### 7. Posibles Mejoras
+- Extensión de funcionalidades existentes
+- Mejora de interfaces de usuario
+- Integración con servicios adicionales
+- Optimización de procesos repetitivos
+
+---
+
+*Definición funcional para agente de IA. Este documento define la aplicación a nivel funcional sin respetar nombres de tablas y campos.*

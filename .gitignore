@@ -1,0 +1,20 @@
+node_modules/
+dist/
+.tmp/
+.angular/
+*.tsbuildinfo
+
+.env
+.env.local
+
+# Prisma
+apps/api/prisma/dev.db
+apps/api/prisma/dev.db-journal
+
+# Angular
+apps/web/.angular/
+
+# Cobertura y logs
+coverage/
+*.log
+npm-debug.log*

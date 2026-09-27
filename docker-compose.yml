@@ -1,0 +1,31 @@
+name: intermediacion
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: intermediacion-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: intermediacion
+      POSTGRES_PASSWORD: intermediacion
+      POSTGRES_DB: intermediacion
+      # Fija el LocaleCluster/SETUP para que ORDER BY sobre texto sea estable
+      POSTGRES_INITDB_ARGS: '--locale=C --encoding=UTF8'
+    ports:
+      - '5435:5432'
+    volumes:
+      - intermediacion_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U intermediacion -d intermediacion']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    # Sin límites de CPU/memoria: esta app no se benchmarkea (a diferencia del
+    # laboratorio de 5 stacks que se retreats en el AGENTS.md anterior).
+    command:
+      - postgres
+      - -c
+      - max_connections=100
+
+volumes:
+  intermediacion_pgdata:
