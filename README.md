@@ -88,6 +88,33 @@ npm run api:test
 node apps/api/test/smoke.mjs
 ```
 
+### Tests con Bruno (Contract Testing)
+
+Para testing de contrato estilo Bruno (como en repos hermanos):
+
+```bash
+# Instalar Bruno CLI
+npm install -g @usebruno/cli
+
+# Ejecutar colección de tests contra la API local
+bru run tests/bruno --env local
+```
+
+Los tests de contrato están en `tests/bruno/` y validan todos los endpoints definidos en la especificación OpenAPI.
+
+### Documentación API
+
+La documentación interactiva Swagger/OpenAPI está disponible en:
+
+- **Swagger UI**: http://localhost:3000/swagger
+- **OpenAPI JSON**: http://localhost:3000/swagger/json
+
+Incluye:
+- Todos los endpoints con parámetros, request/response schemas
+- Autenticación Bearer JWT (botón "Authorize")
+- Esquemas de validación Zod convertidos a JSON Schema
+- Ejemplos de request/response
+
 ### Comandos Útiles
 
 ```bash
@@ -126,11 +153,58 @@ Una vez corriendo la API (`npm run api:dev`):
 
 - **Health check**: `GET http://localhost:3000/health`
 - **Login**: `POST http://localhost:3000/api/auth/login`
-- **API Docs**: (pendiente - Swagger/OpenAPI)
+- **Documentación API (Swagger UI)**: `http://localhost:3000/swagger`
+- **Esquema OpenAPI (JSON)**: `GET http://localhost:3000/swagger/json`
 
 Credenciales por defecto (seed):
 - Email: `admin@intermediacion.local`
 - Password: `admin1234`
+
+## Estructura del Proyecto
+
+```
+intermediation/
+├── apps/
+│   ├── api/                 # Backend Fastify + TypeScript
+│   │   ├── src/
+│   │   │   ├── modules/     # Módulos por dominio
+│   │   │   │   ├── auth/           # Autenticación JWT
+│   │   │   │   ├── factories/      # Fábricas y catálogos
+│   │   │   │   ├── articles/       # Artículos y ofertas
+│   │   │   │   ├── customers/      # Clientes
+│   │   │   │   ├── price-lists/    # Tarifas de precio
+│   │   │   │   ├── prices/         # Resolución de precios por fecha
+│   │   │   │   ├── sales-orders/   # Pedidos de venta
+│   │   │   │   ├── service-orders/ # Órdenes de servicio y verificación
+│   │   │   │   ├── invoices/       # Facturas de comisión
+│   │   │   │   └── dashboard/      # Resumen ejecutivo
+│   │   │   ├── lib/         # Utilidades compartidas
+│   │   │   └── prisma.ts    # Cliente Prisma
+│   │   └── prisma/          # Schema y migraciones
+│   └── web/                 # Frontend Angular (pendiente)
+├── packages/
+│   └── shared/              # DTOs, inputs, tipos compartidos (Zod)
+├── tests/
+│   ├── bruno/               # Tests de contrato (Bruno)
+│   └── smoke.mjs            # Test de humo E2E
+├── docker-compose.yml       # PostgreSQL
+└── .env.example             # Variables de entorno de ejemplo
+```
+
+## Módulos de la API
+
+| Módulo | Prefijo | Descripción |
+|--------|---------|-------------|
+| Auth | `/api/auth` | Login, usuario actual, gestión usuarios (admin) |
+| Factories | `/api/factories` | CRUD fábricas, vínculos fábrica-artículo |
+| Articles | `/api/articles` | CRUD artículos, ofertas comparadas por fecha |
+| Customers | `/api/customers` | CRUD clientes |
+| Price Lists | `/api/price-lists` | Tarifas (draft/active/archived), activación |
+| Prices | `/api/prices` | Resolución precio por fecha, histórico |
+| Sales Orders | `/api/sales-orders` | Pedidos, líneas, confirmación, reparto |
+| Service Orders | `/api/service-orders` | Órdenes servicio, estados, verificación batch |
+| Commission Invoices | `/api/commission-invoices` | Facturas agrupadas, emisión, pago, cancelación |
+| Dashboard | `/api/dashboard` | KPIs ejecutivo |
 
 ## Licencia
 
