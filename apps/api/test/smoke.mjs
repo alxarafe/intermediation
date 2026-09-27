@@ -256,7 +256,6 @@ section('Regla 4b · cambiar la comisión general no afecta a órdenes ya creada
   await api('PATCH', `/api/factories/${QAC.id}`, { defaultCommissionPct: 12 });
   const so = await api('GET', `/api/service-orders/${qacSoId}`);
   eq('  la orden QAC sigue al 8% original', so.data.lines[0].commissionPct, 8);
-  await api('PATCH', `/api/factories/${QAC.id}`, { defaultCommissionPct: 6.5 });
 
   // Un pedido nuevo sí recoge la comisión nueva. Usamos el bidón, que sólo
   // sirve QAC, para que la asignación de fábrica no ambigüe el resultado.
@@ -270,6 +269,7 @@ section('Regla 4b · cambiar la comisión general no afecta a órdenes ya creada
   eq('  el pedido nuevo va a 1 fábrica', l.data.items.length, 1);
   eq('  ...que es QAC', l.data.items[0].factoryId, QAC.id);
   eq('  y usa la comisión vigente (12%)', l.data.items[0].lines[0].commissionPct, 12);
+
   await api('PATCH', `/api/factories/${QAC.id}`, { defaultCommissionPct: 6.5 });
 }
 
